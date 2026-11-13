@@ -385,7 +385,8 @@ nt.links.new(ramp.outputs["Color"], principled_of(M_DESK).inputs["Base Color"])
 
 # --- the letter: a lined sheet, a touch rotated
 PAPER_ROT = math.radians(-3.0)
-PAPER_W, PAPER_H = 3.5, 4.4
+PAPER_W, PAPER_H = 4.9, 3.95
+STEP = 0.4  # spacing of the ruled lines
 bpy.ops.mesh.primitive_plane_add(size=1, location=(0.0, 0.15, 0.0), rotation=(0, 0, PAPER_ROT))
 paper = bpy.context.active_object
 paper.scale = (PAPER_W, PAPER_H, 1)
@@ -395,7 +396,7 @@ nt = M_PAPER.node_tree
 tc = node(nt, "ShaderNodeTexCoord", (-1400, 300))
 sep = node(nt, "ShaderNodeSeparateXYZ", (-1200, 300))
 nt.links.new(tc.outputs["Object"], sep.inputs["Vector"])
-RULE = 0.52 / PAPER_H  # object-space spacing of the rules (sheet is scaled)
+RULE = STEP / PAPER_H  # object-space spacing of the rules (sheet is scaled)
 yy = node(nt, "ShaderNodeMath", (-1000, 300))
 yy.operation = "WRAP"
 yy.inputs[1].default_value = 0.0
@@ -409,7 +410,7 @@ rule.inputs["To Max"].default_value = 0.0
 nt.links.new(yy.outputs["Value"], rule.inputs["Value"])
 top_cut = node(nt, "ShaderNodeMath", (-800, 100))
 top_cut.operation = "LESS_THAN"
-top_cut.inputs[1].default_value = 0.36
+top_cut.inputs[1].default_value = (PAPER_H / 2 - 0.25) / PAPER_H
 nt.links.new(sep.outputs["Y"], top_cut.inputs[0])
 rule_m = node(nt, "ShaderNodeMath", (-600, 300))
 rule_m.operation = "MULTIPLY"
@@ -452,30 +453,40 @@ def on_paper(x, y, z=0.0015):
 
 # the sheet's rules sit at multiples of 0.52 from its centre; write on them
 def rule_y(k):
-    return k * 0.52 - paper.location.y * 0 + 0.0
+    return k * STEP
 
 
-LEFT = -PAPER_W / 2 + 0.55
-# the letter: he noticed the judge never gets to rest, so he offered to nap on its behalf, and did, mid-word
-L1 = text_object("Line1", "dear judge,", "Inkfree.ttf", 0.5, on_paper(LEFT, rule_y(3) + 0.03), M_BLUE, PAPER_ROT)
-L2 = text_object("Line2", "you never get a nap,", "Inkfree.ttf", 0.4, on_paper(LEFT, rule_y(2) + 0.03), M_BLUE,
-                 PAPER_ROT)
-L3 = text_object("Line3", "so today i will", "Inkfree.ttf", 0.4, on_paper(LEFT, rule_y(1) + 0.03), M_BLUE, PAPER_ROT)
-L4 = text_object("Line4", "nap for yo", "Inkfree.ttf", 0.4, on_paper(LEFT, rule_y(0) + 0.03), M_BLUE, PAPER_ROT)
-for t in (L1, L2, L3, L4):
+LEFT = -PAPER_W / 2 + 0.6
+# the letter: the judge looks at pictures all day and nobody brings it a snack, so pip gives up his best seed
+# (having checked all the others, which is why his cheeks are full), and falls asleep in the last p.s.
+LETTER = [
+    (4, "dear judge,", 0.4),
+    (3, "you look at pictures all day and", 0.3),
+    (2, "nobody ever brings you a snack.", 0.3),
+    (1, "so here is my best seed.", 0.3),
+    (0, "love, pip", 0.3),
+    (-1, "p.s. it is the best one.", 0.28),
+    (-2, "p.p.s. i checked them all.", 0.28),
+    (-3, "p.p.p.s. i need a little na", 0.28),
+]
+LINES = []
+for k, body, size in LETTER:
+    t = text_object(f"Line{k}", body, "Inkfree.ttf", size, on_paper(LEFT, rule_y(k) + 0.025), M_BLUE, PAPER_ROT)
     t.data.extrude = 0.0
-    t.data.offset = 0.008  # a hair bolder, the way a crayon writes
+    t.data.offset = 0.006  # a hair bolder, the way a crayon writes
+    LINES.append(t)
+L1, L_SEED, L_SIG, L_LAST = LINES[0], LINES[3], LINES[4], LINES[-1]
 
 # --- the hamster (local frame: face toward -Y, belly on the paper)
-HAM_LOC = on_paper(0.62, -1.2, 0.0)
-HAM_SCALE = 1.6
-HAM_ROT = math.radians(-18.0)
+HAM_LOC = on_paper(1.32, -1.32, 0.0)
+HAM_SCALE = 1.36
+HAM_ROT = math.radians(-38.0)
 ham = metaball_mesh("Hamster", [
     ellipsoid((0.0, 0.20, 0.25), (0.40, 0.46, 0.27)),          # body, a round loaf
     ellipsoid((0.0, 0.40, 0.21), (0.37, 0.30, 0.22)),          # rump
     ellipsoid((0.0, -0.22, 0.24), (0.34, 0.31, 0.26)),         # head, big and resting low (asleep)
-    ellipsoid((-0.2, -0.32, 0.16), (0.17, 0.17, 0.15)),        # cheek pouch L
-    ellipsoid((0.2, -0.32, 0.16), (0.17, 0.17, 0.15)),         # cheek pouch R
+    ellipsoid((-0.25, -0.31, 0.16), (0.23, 0.21, 0.19)),       # cheek pouch L, stuffed with "checked" seeds
+    ellipsoid((0.25, -0.31, 0.16), (0.23, 0.21, 0.19)),        # cheek pouch R
     ellipsoid((0.0, -0.45, 0.17), (0.12, 0.12, 0.11)),         # muzzle
     ellipsoid((0.33, 0.50, 0.07), (0.12, 0.17, 0.07)),         # hind foot peeking out
 ], M_SKIN, resolution=0.015)
@@ -486,7 +497,7 @@ bpy.context.view_layer.update()
 
 # The face is laid out on the head as the camera sees it: rays along the camera's view direction (in the
 # hamster's frame), offset across the screen by (u right, v up) from the head's centre.
-CAM_TILT = math.radians(40)
+CAM_TILT = math.radians(30)
 VIEW = Matrix.Rotation(-HAM_ROT, 3, "Z") @ Vector((0.0, math.sin(CAM_TILT), -math.cos(CAM_TILT)))
 RIGHT = VIEW.cross(Vector((0, 0, 1))).normalized()
 UP = RIGHT.cross(VIEW).normalized()
@@ -608,9 +619,9 @@ crayon("Crayon", c_start, c_dir, 0.62, M_WAX_BLUE, M_WRAP_BLUE)
 tip_world = Vector((c_start.x, c_start.y, 0.0015))
 
 # other crayons on the desk
-crayon("RedCrayon", on_paper(2.15, -1.6, 0.045), (0.3, 1.0, 0), 0.62, M_WAX_RED,
+crayon("RedCrayon", on_paper(2.75, 0.9, 0.045), (0.25, 1.0, 0), 0.62, M_WAX_RED,
        new_material("WrapRed", (0.45, 0.03, 0.03), rough=0.7))
-crayon("GreenCrayon", on_paper(2.0, -2.35, 0.045), (1.0, 0.25, 0), 0.62, M_WAX_GREEN,
+crayon("GreenCrayon", on_paper(-1.9, -2.3, 0.045), (1.0, 0.2, 0), 0.62, M_WAX_GREEN,
        new_material("WrapGreen", (0.03, 0.25, 0.06), rough=0.7))
 
 # fur
@@ -707,10 +718,9 @@ sub = blanket.modifiers.new("Smooth", "SUBSURF")
 sub.levels = 1
 sub.render_levels = 2
 
-# --- the sleepy line: from the end of "yo" down to the crayon tip, wandering and slowing
-w4 = text_width(L4)
-start = on_paper(LEFT + w4 + 0.04, rule_y(0) + 0.14)
-# it dips left off the end of the word, then slides straight down the gap between the note and him
+# --- the sleepy line: from the end of "na" across to the crayon tip under his paw, wandering as he nods off
+w_last = text_width(L_LAST)
+start = on_paper(LEFT + w_last + 0.03, rule_y(-3) + 0.1)
 c_ = math.cos(PAPER_ROT)
 s_ = math.sin(PAPER_ROT)
 
@@ -722,10 +732,9 @@ def to_paper(v):
 
 tip_p = to_paper(tip_world)
 start_p = to_paper(start)
-lane_x = tip_p.x + 0.04
-way = [start_p, Vector((start_p.x + 0.05, start_p.y - 0.22)), Vector((lane_x + 0.12, start_p.y - 0.5)),
-       Vector((lane_x, start_p.y - 0.9)), Vector((lane_x + 0.02, (start_p.y + tip_p.y) / 2 - 0.3)),
-       Vector((tip_p.x + 0.01, tip_p.y + 0.12)), tip_p]
+mid_p = (start_p + tip_p) / 2
+way = [start_p, Vector((start_p.x + 0.08, start_p.y - 0.12)), Vector((mid_p.x, mid_p.y - 0.18)),
+       Vector((tip_p.x - 0.12, tip_p.y - 0.04)), tip_p]
 
 
 def catmull(ps, n):
@@ -745,52 +754,78 @@ pts = []
 path = catmull(way, 12)
 for i, q in enumerate(path):
     t = i / (len(path) - 1)
-    wob = 0.035 * math.sin(t * math.pi * 9.0) * (1 - t)  # the hand drifting as he nods off
-    pts.append(tuple(on_paper(q.x + wob, q.y)))
-scribble = curve_object("Scribble", pts, 0.016, M_BLUE)
+    wob = 0.03 * math.sin(t * math.pi * 7.0) * (1 - t)  # the hand drifting as he nods off
+    pts.append(tuple(on_paper(q.x, q.y + wob)))
+scribble = curve_object("Scribble", pts, 0.014, M_BLUE)
 scribble.scale = (1, 1, 0.12)
 
-# --- a red crayon heart he drew after "dear judge," (drawn in one wobbly loop, a little overshoot)
+# --- a red crayon heart he drew after "love, pip" (one wobbly loop, a little overshoot)
 M_RED = crayon_material("RedCrayon", (0.55, 0.02, 0.03), gaps=0.28)
-w1 = text_width(L1)
-hc = (LEFT + w1 + 0.42, rule_y(3) + 0.22)
-heart = []
-for k in range(73):
-    t = 2 * math.pi * k / 64  # a little past one full turn, as a hand draws it
-    hx = 16 * math.sin(t) ** 3
-    hy = 13 * math.cos(t) - 5 * math.cos(2 * t) - 2 * math.cos(3 * t) - math.cos(4 * t)
-    wob = 1.0 + 0.03 * math.sin(5 * t)
-    p = on_paper(hc[0] + hx * 0.015 * wob, hc[1] + hy * 0.015 * wob)
-    heart.append(tuple(p))
-heart_obj = curve_object("Heart", heart, 0.021, M_RED)
-heart_obj.scale = (1, 1, 0.12)
-
-# --- the sticky note, in another hand
-NOTE_LOC = on_paper(-1.1, -1.5, 0.002)
-bpy.ops.mesh.primitive_plane_add(size=1.6, location=NOTE_LOC, rotation=(0, 0, math.radians(6)))
-note = bpy.context.active_object
-note.data.materials.append(M_STICKY)
-nr = math.radians(6)
-nc, ns = math.cos(nr), math.sin(nr)
 
 
-def on_note(x, y, z=0.0035):
-    return Vector((NOTE_LOC.x + nc * x - ns * y, NOTE_LOC.y + ns * x + nc * y, z))
+def crayon_loop(name, centre, fn, n=72, turns=1.12, width=0.018):
+    pts_ = []
+    for k in range(n + 1):
+        t = 2 * math.pi * turns * k / n
+        x, y = fn(t)
+        pts_.append(tuple(on_paper(centre[0] + x, centre[1] + y)))
+    o = curve_object(name, pts_, width, M_RED)
+    o.scale = (1, 1, 0.12)
+    return o
 
 
-note_text = text_object("NoteText", "he's napping for you.\nit's going great.\n\nplease don't wake him.",
-                        "segoepr.ttf", 0.192, on_note(-0.73, 0.45), M_PENCIL, nr, spacing=1.2)
-note_text.data.offset = 0.005  # a soft felt-tip, bold enough to read small
+def heart_xy(t, s=0.011):
+    w = 1.0 + 0.03 * math.sin(5 * t)
+    return (16 * math.sin(t) ** 3 * s * w,
+            (13 * math.cos(t) - 5 * math.cos(2 * t) - 2 * math.cos(3 * t) - math.cos(4 * t)) * s * w)
+
+
+crayon_loop("Heart", (LEFT + text_width(L_SIG) + 0.3, rule_y(0) + 0.14), heart_xy)
+
+# --- the gift: one real sunflower seed on the letter, ringed in red crayon, "for you" written by it
+M_SEED = new_material("Seed", (0.03, 0.03, 0.03), rough=0.35, coat=0.3)
+snt = M_SEED.node_tree
+stc = node(snt, "ShaderNodeTexCoord", (-900, 200))
+swave = node(snt, "ShaderNodeTexWave", (-700, 200), Scale=3.2, Distortion=1.2, Detail=2.0)
+swave.bands_direction = "X"
+snt.links.new(stc.outputs["Object"], swave.inputs["Vector"])
+sramp = snt.nodes.new("ShaderNodeValToRGB")
+sramp.location = (-450, 200)
+sramp.color_ramp.elements[0].position = 0.72
+sramp.color_ramp.elements[0].color = (0.02, 0.02, 0.022, 1)
+sramp.color_ramp.elements[1].position = 0.86
+sramp.color_ramp.elements[1].color = (0.75, 0.72, 0.66, 1)
+snt.links.new(swave.outputs["Fac"], sramp.inputs["Fac"])
+snt.links.new(sramp.outputs["Color"], principled_of(M_SEED).inputs["Base Color"])
+SEED_C = (LEFT + text_width(L_SEED) + 0.75, rule_y(1) + 0.12)
+seed_loc = on_paper(*SEED_C, 0.045)
+bpy.ops.mesh.primitive_uv_sphere_add(segments=32, ring_count=16, radius=1.0, location=seed_loc,
+                                     rotation=(0, 0, PAPER_ROT + math.radians(25)))
+seed = bpy.context.active_object
+seed.scale = (0.1, 0.2, 0.055)
+bm_seed = seed.data
+for v in bm_seed.vertices:  # one end pointed, like a real seed
+    if v.co.y > 0:
+        f = 1.0 - 0.55 * v.co.y ** 2
+        v.co.x *= f
+        v.co.z *= f
+seed.data.materials.append(M_SEED)
+bpy.ops.object.shade_smooth()
+crayon_loop("SeedRing", SEED_C, lambda t: (0.36 * math.cos(t) * (1 + 0.04 * math.sin(3 * t)),
+                                           0.3 * math.sin(t) * (1 + 0.04 * math.cos(2 * t))), turns=1.08)
+ft = text_object("ForYou", "for you!", "Inkfree.ttf", 0.27, on_paper(SEED_C[0] + 0.36, SEED_C[1] - 0.28),
+                 M_RED, PAPER_ROT)
+ft.data.offset = 0.005
 
 # --- camera: from the front, looking down the desk
-target = on_paper(-0.12, -0.62, 0.0)
+target = on_paper(0.18, -0.2, 0.0)
 cam_data = bpy.data.cameras.new("Cam")
 cam_data.lens = 50
 cam_data.dof.use_dof = True
 cam_data.dof.aperture_fstop = 2.0
 cam = link(bpy.data.objects.new("Cam", cam_data))
 tilt = CAM_TILT
-dist = 6.15
+dist = 6.75
 cam.location = target + Vector((0.0, -dist * math.sin(tilt), dist * math.cos(tilt)))
 cam.rotation_euler = (target - cam.location).to_track_quat("-Z", "Y").to_euler()
 focus = link(bpy.data.objects.new("Focus", None))
