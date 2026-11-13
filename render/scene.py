@@ -308,14 +308,17 @@ scene = bpy.context.scene
 M_DESK = new_material("Desk", (0.33, 0.17, 0.08), rough=0.45)
 M_PAPER = new_material("Paper", (0.93, 0.91, 0.86), rough=0.85, bump=0.03, bump_scale=400)
 M_STICKY = new_material("Sticky", (0.98, 0.83, 0.25), rough=0.8, bump=0.02, bump_scale=300)
-M_BLUE = crayon_material("BlueCrayon", (0.015, 0.06, 0.42), gaps=0.28)
+M_BLUE = crayon_material("BlueCrayon", (0.008, 0.035, 0.34), gaps=0.24)
 M_PENCIL = crayon_material("Pencil", (0.012, 0.012, 0.018), grain=260.0, gaps=0.08)
 M_RED_LINE = new_material("Margin", (0.85, 0.25, 0.25), rough=0.8)
 M_PINK = new_material("PawPink", (0.95, 0.55, 0.55), rough=0.45, sss=0.35)
-M_EAR = new_material("Ear", (0.80, 0.47, 0.40), rough=0.75, sss=0.6, sheen=0.8, bump=0.05, bump_scale=200)
+M_EAR = new_material("Ear", (0.58, 0.36, 0.33), rough=0.85, sss=0.8, sheen=1.0, bump=0.08, bump_scale=300)
+principled_of(M_EAR).inputs["Sheen Tint"].default_value = (0.9, 0.75, 0.6, 1)
+principled_of(M_EAR).inputs["Specular IOR Level"].default_value = 0.2
+M_WHISKER = new_material("Whisker", (0.95, 0.93, 0.9), rough=0.3)
 M_NOSE = new_material("Nose", (0.85, 0.42, 0.45), rough=0.3, sss=0.3, coat=0.4)
 M_LID = new_material("Lid", (0.06, 0.03, 0.02), rough=0.4)
-M_SKIN = new_material("Skin", (0.80, 0.52, 0.30), rough=0.6, sss=0.3)
+M_SKIN = new_material("Skin", (0.50, 0.27, 0.10), rough=0.7, sss=0.15)
 M_WAX_BLUE = new_material("WaxBlue", (0.05, 0.18, 0.72), rough=0.35, coat=0.2)
 M_WRAP_BLUE = new_material("WrapBlue", (0.03, 0.10, 0.45), rough=0.7)
 M_WAX_RED = new_material("WaxRed", (0.75, 0.06, 0.05), rough=0.35, coat=0.2)
@@ -487,9 +490,24 @@ for k in range(13):
     mouth.append(tuple(q + nn * 0.005))
 child(curve_object("Mouth", mouth, 0.006, M_LID))
 keep.append((face_hit(0.0, -0.075)[0], 0.05))
+# whiskers: fine pale hairs fanning out from either side of the muzzle, drooping a little in his sleep
+for side in (-1, 1):
+    for k in range(4):
+        root, rn = face_hit(side * (0.055 + 0.012 * k), -0.03 - 0.018 * k)
+        root = root - rn * 0.01
+        length = 0.30 - 0.025 * k
+        spread = 0.10 - 0.06 * k
+        pts = []
+        for s_ in range(9):
+            t = s_ / 8
+            p = (root + RIGHT * side * length * t + Vector((0, -0.10, 0)) * t
+                 + Vector((0, 0, 1)) * (spread * t - 0.09 * t * t))
+            pts.append(tuple(p))
+        w = child(curve_object(f"Whisker{side}{k}", pts, 0.0028, M_WHISKER))
+        w.data.bevel_resolution = 1
 # ears: round and pink, up on the head
 for side in (-1, 1):
-    child(sphere(f"Ear{side}", (side * 0.21, -0.12, 0.43), (0.10, 0.035, 0.095), M_EAR,
+    child(sphere(f"Ear{side}", (side * 0.21, -0.12, 0.42), (0.10, 0.022, 0.09), M_EAR,
                  rot=(math.radians(-20), side * math.radians(25), 0)))
 # front paws, tucked by the chin, curled round the crayon
 for side in (-1, 1):
@@ -589,7 +607,11 @@ gramp.color_ramp.elements[1].position = 0.75
 gramp.color_ramp.elements[1].color = (0.86, 0.36, 0.42, 1)
 mid_e = gramp.color_ramp.elements.new(0.25)
 mid_e.color = (0.95, 0.68, 0.70, 1)
-gnt.links.new(gsum.outputs["Value"], gramp.inputs["Fac"])
+ghalf = node(gnt, "ShaderNodeMath", (-250, 100))  # 0 white, 0.5 one stripe, 1 where two stripes cross
+ghalf.operation = "MULTIPLY"
+ghalf.inputs[1].default_value = 0.5
+gnt.links.new(gsum.outputs["Value"], ghalf.inputs[0])
+gnt.links.new(ghalf.outputs["Value"], gramp.inputs["Fac"])
 gnt.links.new(gramp.outputs["Color"], principled_of(M_GINGHAM).inputs["Base Color"])
 
 BX, BY0, BY1, NX, NY = 0.5, 0.02, 0.78, 60, 70
@@ -721,6 +743,14 @@ fill.size = 5.0
 fill.color = (0.85, 0.9, 1.0)
 fo = link(bpy.data.objects.new("Fill", fill))
 fo.location = (3.5, -4.0, 5.0)
+# a warm rim from behind him, so the fur edges glow against the paper
+rim = bpy.data.lights.new("Rim", "AREA")
+rim.energy = 160
+rim.size = 0.8
+rim.color = (1.0, 0.85, 0.65)
+ro = link(bpy.data.objects.new("Rim", rim))
+ro.location = HAM_LOC + Vector((0.9, 2.4, 1.0))
+ro.rotation_euler = (ro.location - HAM_LOC).to_track_quat("Z", "Y").to_euler()
 fo.rotation_euler = (fo.location - target).to_track_quat("Z", "Y").to_euler()
 world = bpy.data.worlds.new("World")
 world.use_nodes = True
@@ -752,6 +782,7 @@ for look in ("AgX - Medium High Contrast", "AgX - Base Contrast"):
         break
     except TypeError:
         pass
+scene.view_settings.exposure = -0.15
 scene.render.image_settings.file_format = "PNG"
 scene.render.image_settings.color_mode = "RGB"
 scene.render.image_settings.compression = 100
