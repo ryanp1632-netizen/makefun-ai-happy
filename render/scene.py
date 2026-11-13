@@ -456,10 +456,13 @@ def rule_y(k):
 
 
 LEFT = -PAPER_W / 2 + 0.55
-L1 = text_object("Line1", "dear judge,", "Inkfree.ttf", 0.52, on_paper(LEFT, rule_y(3) + 0.03), M_BLUE, PAPER_ROT)
-L2 = text_object("Line2", "you are doing", "Inkfree.ttf", 0.46, on_paper(LEFT, rule_y(2) + 0.03), M_BLUE, PAPER_ROT)
-L3 = text_object("Line3", "so gre", "Inkfree.ttf", 0.46, on_paper(LEFT, rule_y(1) + 0.03), M_BLUE, PAPER_ROT)
-for t in (L1, L2, L3):
+# the letter: he noticed the judge never gets to rest, so he offered to nap on its behalf, and did, mid-word
+L1 = text_object("Line1", "dear judge,", "Inkfree.ttf", 0.5, on_paper(LEFT, rule_y(3) + 0.03), M_BLUE, PAPER_ROT)
+L2 = text_object("Line2", "you never get a nap,", "Inkfree.ttf", 0.4, on_paper(LEFT, rule_y(2) + 0.03), M_BLUE,
+                 PAPER_ROT)
+L3 = text_object("Line3", "so today i will", "Inkfree.ttf", 0.4, on_paper(LEFT, rule_y(1) + 0.03), M_BLUE, PAPER_ROT)
+L4 = text_object("Line4", "nap for yo", "Inkfree.ttf", 0.4, on_paper(LEFT, rule_y(0) + 0.03), M_BLUE, PAPER_ROT)
+for t in (L1, L2, L3, L4):
     t.data.extrude = 0.0
     t.data.offset = 0.008  # a hair bolder, the way a crayon writes
 
@@ -654,7 +657,7 @@ gnt.links.new(gsum.outputs["Value"], ghalf.inputs[0])
 gnt.links.new(ghalf.outputs["Value"], gramp.inputs["Fac"])
 gnt.links.new(gramp.outputs["Color"], principled_of(M_GINGHAM).inputs["Base Color"])
 
-BX, BY0, BY1, NX, NY = 0.5, 0.02, 0.78, 60, 70
+BX, BY0, BY1, NX, NY = 0.45, 0.02, 0.78, 60, 70
 CLEAR = 0.075  # above the fur
 heights, base = {}, {}
 for j in range(NY + 1):
@@ -704,20 +707,46 @@ sub = blanket.modifiers.new("Smooth", "SUBSURF")
 sub.levels = 1
 sub.render_levels = 2
 
-# --- the sleepy line: from the end of "gre" down to the crayon tip, wandering and slowing
-w3 = text_width(L3)
-start = on_paper(LEFT + w3 + 0.04, rule_y(1) + 0.16)
+# --- the sleepy line: from the end of "yo" down to the crayon tip, wandering and slowing
+w4 = text_width(L4)
+start = on_paper(LEFT + w4 + 0.04, rule_y(0) + 0.14)
+# it dips left off the end of the word, then slides straight down the gap between the note and him
+c_ = math.cos(PAPER_ROT)
+s_ = math.sin(PAPER_ROT)
+
+
+def to_paper(v):
+    d = v - paper.location
+    return Vector((c_ * d.x + s_ * d.y, -s_ * d.x + c_ * d.y))
+
+
+tip_p = to_paper(tip_world)
+start_p = to_paper(start)
+lane_x = tip_p.x + 0.04
+way = [start_p, Vector((start_p.x + 0.05, start_p.y - 0.22)), Vector((lane_x + 0.12, start_p.y - 0.5)),
+       Vector((lane_x, start_p.y - 0.9)), Vector((lane_x + 0.02, (start_p.y + tip_p.y) / 2 - 0.3)),
+       Vector((tip_p.x + 0.01, tip_p.y + 0.12)), tip_p]
+
+
+def catmull(ps, n):
+    out = []
+    ext = [ps[0] * 2 - ps[1]] + ps + [ps[-1] * 2 - ps[-2]]
+    for k in range(1, len(ext) - 2):
+        p0, p1, p2, p3 = ext[k - 1], ext[k], ext[k + 1], ext[k + 2]
+        for i in range(n):
+            t = i / n
+            out.append(0.5 * ((2 * p1) + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t * t
+                              + (-p0 + 3 * p1 - 3 * p2 + p3) * t * t * t))
+    out.append(ps[-1])
+    return out
+
+
 pts = []
-N = 60
-for i in range(N + 1):
-    t = i / N
-    base = start.lerp(tip_world, t)
-    # a slow sideways wobble that settles, plus one loop where the paw slipped
-    perp = Vector((-(tip_world - start).y, (tip_world - start).x, 0)).normalized()
-    wob = 0.16 * math.sin(t * math.pi * 3.2) * (1 - t) ** 0.8
-    p = base + perp * wob
-    p.z = 0.0015
-    pts.append(tuple(p))
+path = catmull(way, 12)
+for i, q in enumerate(path):
+    t = i / (len(path) - 1)
+    wob = 0.035 * math.sin(t * math.pi * 9.0) * (1 - t)  # the hand drifting as he nods off
+    pts.append(tuple(on_paper(q.x + wob, q.y)))
 scribble = curve_object("Scribble", pts, 0.016, M_BLUE)
 scribble.scale = (1, 1, 0.12)
 
@@ -737,8 +766,8 @@ heart_obj = curve_object("Heart", heart, 0.021, M_RED)
 heart_obj.scale = (1, 1, 0.12)
 
 # --- the sticky note, in another hand
-NOTE_LOC = on_paper(-1.02, -1.3, 0.002)
-bpy.ops.mesh.primitive_plane_add(size=1.55, location=NOTE_LOC, rotation=(0, 0, math.radians(6)))
+NOTE_LOC = on_paper(-1.1, -1.5, 0.002)
+bpy.ops.mesh.primitive_plane_add(size=1.6, location=NOTE_LOC, rotation=(0, 0, math.radians(6)))
 note = bpy.context.active_object
 note.data.materials.append(M_STICKY)
 nr = math.radians(6)
@@ -749,19 +778,19 @@ def on_note(x, y, z=0.0035):
     return Vector((NOTE_LOC.x + nc * x - ns * y, NOTE_LOC.y + ns * x + nc * y, z))
 
 
-note_text = text_object("NoteText", "he means great.\nhe worked on it\nall day. please\ndon't wake him.",
-                        "segoepr.ttf", 0.205, on_note(-0.68, 0.48), M_PENCIL, nr, spacing=1.05)
+note_text = text_object("NoteText", "he's napping for you.\nit's going great.\n\nplease don't wake him.",
+                        "segoepr.ttf", 0.192, on_note(-0.73, 0.45), M_PENCIL, nr, spacing=1.2)
 note_text.data.offset = 0.005  # a soft felt-tip, bold enough to read small
 
 # --- camera: from the front, looking down the desk
-target = on_paper(0.05, -0.62, 0.0)
+target = on_paper(-0.12, -0.62, 0.0)
 cam_data = bpy.data.cameras.new("Cam")
 cam_data.lens = 50
 cam_data.dof.use_dof = True
 cam_data.dof.aperture_fstop = 2.0
 cam = link(bpy.data.objects.new("Cam", cam_data))
 tilt = CAM_TILT
-dist = 5.7
+dist = 6.15
 cam.location = target + Vector((0.0, -dist * math.sin(tilt), dist * math.cos(tilt)))
 cam.rotation_euler = (target - cam.location).to_track_quat("-Z", "Y").to_euler()
 focus = link(bpy.data.objects.new("Focus", None))

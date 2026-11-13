@@ -2,9 +2,10 @@
 
 An entry for make.fun's **Make the AI judge happy** (`ai-happy-01`).
 
-A golden hamster sat down to write the judge a letter: *"dear judge, you are doing so gre"*, and then he fell
-asleep, the last word trailing off into a long, sleepy crayon line that ends at the blue crayon still under his
-paw. Someone has stuck a note beside him: *"he means great. he worked on it all day. please don't wake him."*
+A golden hamster noticed that the judge never gets to rest, so he wrote it a letter: *"dear judge, you never get
+a nap, so today i will nap for yo"*, and then he did, mid-word, the last word trailing off into a sleepy crayon
+line that ends at the blue crayon still under his paw. Someone has tucked a gingham hanky over him and stuck a note
+beside him: *"he's napping for you. it's going great. please don't wake him."*
 
 ![entry](art/entry.png)
 
