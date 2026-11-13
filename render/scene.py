@@ -83,7 +83,8 @@ def new_material(name, color, rough=0.5, sss=0.0, sheen=0.0, coat=0.0, bump=0.0,
 
 def crayon_material(name, color, grain=140.0, gaps=0.42):
     """Waxy crayon stroke: the colour with paper showing through in a fine grain (alpha from noise)."""
-    mat = new_material(name, color, rough=0.55)
+    mat = new_material(name, color, rough=0.9)
+    principled_of(mat).inputs["Specular IOR Level"].default_value = 0.1  # matte wax, no lamp glare
     nt = mat.node_tree
     bsdf = principled_of(mat)
     tc = node(nt, "ShaderNodeTexCoord", (-1000, 200))
@@ -215,6 +216,7 @@ def add_fur(obj, mat, length, count, children, keep_out, seed, radius=0.0028):
         for c, r in keep_out:
             t = ((v.co - Vector(c)).length - r) / (r * 0.7)
             w = min(w, max(0.0, min(1.0, t)))
+        w = 0.35 + 0.65 * w  # short, sparse fur by the eyes and nose, never a bald ring
         vg.add([v.index], w, "REPLACE")
     obj.data.materials.append(mat)
     obj.modifiers.new("Fur", "PARTICLE_SYSTEM")
@@ -310,7 +312,7 @@ M_BLUE = crayon_material("BlueCrayon", (0.015, 0.06, 0.42), gaps=0.28)
 M_PENCIL = crayon_material("Pencil", (0.012, 0.012, 0.018), grain=260.0, gaps=0.08)
 M_RED_LINE = new_material("Margin", (0.85, 0.25, 0.25), rough=0.8)
 M_PINK = new_material("PawPink", (0.95, 0.55, 0.55), rough=0.45, sss=0.35)
-M_EAR = new_material("Ear", (0.88, 0.48, 0.42), rough=0.5, sss=0.5, sheen=0.4)
+M_EAR = new_material("Ear", (0.80, 0.47, 0.40), rough=0.75, sss=0.6, sheen=0.8, bump=0.05, bump_scale=200)
 M_NOSE = new_material("Nose", (0.85, 0.42, 0.45), rough=0.3, sss=0.3, coat=0.4)
 M_LID = new_material("Lid", (0.06, 0.03, 0.02), rough=0.4)
 M_SKIN = new_material("Skin", (0.80, 0.52, 0.30), rough=0.6, sss=0.3)
@@ -456,7 +458,7 @@ def face_hit(u, v):
 nose_p, nose_n = face_hit(0.0, -0.035)
 EYE_U, EYE_V = 0.135, 0.085
 eyes = [face_hit(side * EYE_U, EYE_V) for side in (-1, 1)]
-keep = [(nose_p, 0.06)] + [(p, 0.075) for p, _ in eyes]
+keep = [(nose_p, 0.05)] + [(p, 0.055) for p, _ in eyes]
 
 
 def child(o):
@@ -473,8 +475,8 @@ for i, side in enumerate((-1, 1)):
         u = side * EYE_U + (t - 0.5) * 0.12
         v = EYE_V - 0.026 * math.sin(math.pi * t)
         q, nn = face_hit(u, v)
-        pts.append(tuple(q + nn * 0.006))
-    child(curve_object(f"Lid{i}", pts, 0.011, M_LID))
+        pts.append(tuple(q + nn * 0.016))
+    child(curve_object(f"Lid{i}", pts, 0.013, M_LID))
 # a tiny contented mouth under the nose
 mouth = []
 for k in range(13):
@@ -553,6 +555,93 @@ crayon("GreenCrayon", on_paper(2.0, -2.35, 0.045), (1.0, 0.25, 0), 0.62, M_WAX_G
 # fur
 add_fur(ham, M_FUR, length=0.055, count=60000, children=8, keep_out=keep, seed=3)
 
+
+# --- the blanket: a little gingham handkerchief someone tucked over him, draped by ray casts onto his back
+M_GINGHAM = new_material("Gingham", (0.9, 0.3, 0.35), rough=0.85, sheen=0.9, bump=0.04, bump_scale=500)
+gnt = M_GINGHAM.node_tree
+gtc = node(gnt, "ShaderNodeTexCoord", (-1300, 200))
+gsep = node(gnt, "ShaderNodeSeparateXYZ", (-1100, 200))
+gnt.links.new(gtc.outputs["UV"], gsep.inputs["Vector"])
+stripes = []
+for axis in ("X", "Y"):
+    m = node(gnt, "ShaderNodeMath", (-900, 200))
+    m.operation = "MULTIPLY"
+    m.inputs[1].default_value = 11.0
+    gnt.links.new(gsep.outputs[axis], m.inputs[0])
+    f = node(gnt, "ShaderNodeMath", (-700, 200))
+    f.operation = "PINGPONG"
+    f.inputs[1].default_value = 0.5
+    gnt.links.new(m.outputs["Value"], f.inputs[0])
+    g = node(gnt, "ShaderNodeMath", (-500, 200))
+    g.operation = "GREATER_THAN"
+    g.inputs[1].default_value = 0.25
+    gnt.links.new(f.outputs["Value"], g.inputs[0])
+    stripes.append(g.outputs["Value"])
+gsum = node(gnt, "ShaderNodeMath", (-300, 200))
+gsum.operation = "ADD"
+gnt.links.new(stripes[0], gsum.inputs[0])
+gnt.links.new(stripes[1], gsum.inputs[1])
+gramp = gnt.nodes.new("ShaderNodeValToRGB")
+gramp.location = (-150, 200)
+gramp.color_ramp.interpolation = "CONSTANT"
+gramp.color_ramp.elements[0].color = (0.96, 0.93, 0.90, 1)
+gramp.color_ramp.elements[1].position = 0.75
+gramp.color_ramp.elements[1].color = (0.86, 0.36, 0.42, 1)
+mid_e = gramp.color_ramp.elements.new(0.25)
+mid_e.color = (0.95, 0.68, 0.70, 1)
+gnt.links.new(gsum.outputs["Value"], gramp.inputs["Fac"])
+gnt.links.new(gramp.outputs["Color"], principled_of(M_GINGHAM).inputs["Base Color"])
+
+BX, BY0, BY1, NX, NY = 0.5, 0.02, 0.78, 60, 70
+CLEAR = 0.075  # above the fur
+heights, base = {}, {}
+for j in range(NY + 1):
+    for i in range(NX + 1):
+        x = -BX + 2 * BX * i / NX
+        y = BY0 + (BY1 - BY0) * j / NY
+        ok, loc, _, _ = ham.ray_cast(Vector((x, y, 3.0)), Vector((0, 0, -1)))
+        floor = (loc.z + CLEAR) if ok else 0.012 / HAM_SCALE
+        base[i, j] = floor
+        heights[i, j] = floor
+for _ in range(160):  # cloth under gravity: it sags off his back toward the paper, never into him
+    new = {}
+    for (i, j), z in heights.items():
+        nb = [heights[k] for k in ((i - 1, j), (i + 1, j), (i, j - 1), (i, j + 1)) if k in heights]
+        new[i, j] = max(base[i, j], 0.5 * z + 0.5 * sum(nb) / len(nb) - 0.004)
+    heights = new
+verts, faces, uvs = [], [], []
+rnd = random.Random(11)
+for j in range(NY + 1):
+    for i in range(NX + 1):
+        x = -BX + 2 * BX * i / NX
+        y = BY0 + (BY1 - BY0) * j / NY
+        # soft folds that grow toward the hem, where the cloth hangs free
+        edge = max(abs(x) / BX, (y - BY0) / (BY1 - BY0)) ** 3
+        z = heights[i, j] + 0.006 * math.sin(x * 19 + y * 5) * math.sin(y * 13)
+        x += 0.012 * edge * math.sin(y * 17) * (1 if x > 0 else -1)
+        y += 0.015 * edge * math.sin(x * 15)
+        verts.append((x, y, z))
+for j in range(NY):
+    for i in range(NX):
+        a = j * (NX + 1) + i
+        faces.append((a, a + 1, a + NX + 2, a + NX + 1))
+bme = bpy.data.meshes.new("Blanket")
+bme.from_pydata(verts, [], faces)
+uv = bme.uv_layers.new(name="UV")
+for poly in bme.polygons:
+    poly.use_smooth = True
+    for li in poly.loop_indices:
+        vx, vy, _ = verts[bme.loops[li].vertex_index]
+        uv.data[li].uv = ((vx + BX) / (2 * BX), (vy - BY0) / (BY1 - BY0))
+blanket = link(bpy.data.objects.new("Blanket", bme))
+blanket.parent = ham
+bme.materials.append(M_GINGHAM)
+sol = blanket.modifiers.new("Thick", "SOLIDIFY")
+sol.thickness = 0.008
+sub = blanket.modifiers.new("Smooth", "SUBSURF")
+sub.levels = 1
+sub.render_levels = 2
+
 # --- the sleepy line: from the end of "gre" down to the crayon tip, wandering and slowing
 w3 = text_width(L3)
 start = on_paper(LEFT + w3 + 0.04, rule_y(1) + 0.16)
@@ -569,6 +658,21 @@ for i in range(N + 1):
     pts.append(tuple(p))
 scribble = curve_object("Scribble", pts, 0.016, M_BLUE)
 scribble.scale = (1, 1, 0.12)
+
+# --- a red crayon heart he drew after "dear judge," (drawn in one wobbly loop, a little overshoot)
+M_RED = crayon_material("RedCrayon", (0.55, 0.02, 0.03), gaps=0.28)
+w1 = text_width(L1)
+hc = (LEFT + w1 + 0.42, rule_y(3) + 0.22)
+heart = []
+for k in range(73):
+    t = 2 * math.pi * k / 64  # a little past one full turn, as a hand draws it
+    hx = 16 * math.sin(t) ** 3
+    hy = 13 * math.cos(t) - 5 * math.cos(2 * t) - 2 * math.cos(3 * t) - math.cos(4 * t)
+    wob = 1.0 + 0.03 * math.sin(5 * t)
+    p = on_paper(hc[0] + hx * 0.015 * wob, hc[1] + hy * 0.015 * wob)
+    heart.append(tuple(p))
+heart_obj = curve_object("Heart", heart, 0.021, M_RED)
+heart_obj.scale = (1, 1, 0.12)
 
 # --- the sticky note, in another hand
 NOTE_LOC = on_paper(-1.02, -1.3, 0.002)
