@@ -457,17 +457,17 @@ def rule_y(k):
 
 
 LEFT = -PAPER_W / 2 + 0.6
-# the letter: the judge looks at pictures all day and nobody brings it a snack, so pip gives up his best seed
-# (having checked all the others, which is why his cheeks are full), and falls asleep in the last p.s.
+# the letter: the judge scores every picture from 1 to 5 and nobody ever scores the judge, so pip does (a gold
+# star with a 5 on it), and falls asleep in the last p.s.
 LETTER = [
     (4, "dear judge,", 0.4),
-    (3, "you look at pictures all day and", 0.3),
-    (2, "nobody ever brings you a snack.", 0.3),
-    (1, "so here is my best seed.", 0.3),
-    (0, "love, pip", 0.3),
-    (-1, "p.s. it is the best one.", 0.28),
-    (-2, "p.p.s. i checked them all.", 0.28),
-    (-3, "p.p.p.s. i need a little na", 0.28),
+    (3, "all day you give every picture", 0.3),
+    (2, "a number from 1 to 5.", 0.3),
+    (1, "nobody ever gives you one.", 0.3),
+    (0, "so i did.", 0.3),
+    (-1, "love, pip", 0.3),
+    (-2, "p.s. it's a 5. by a lot.", 0.27),
+    (-3, "p.p.s. i need a little na", 0.27),
 ]
 LINES = []
 for k, body, size in LETTER:
@@ -475,7 +475,7 @@ for k, body, size in LETTER:
     t.data.extrude = 0.0
     t.data.offset = 0.006  # a hair bolder, the way a crayon writes
     LINES.append(t)
-L1, L_SEED, L_SIG, L_LAST = LINES[0], LINES[3], LINES[4], LINES[-1]
+L1, L_DID, L_SIG, L_LAST = LINES[0], LINES[4], LINES[5], LINES[-1]
 
 # --- the hamster (local frame: face toward -Y, belly on the paper)
 HAM_LOC = on_paper(1.32, -1.32, 0.0)
@@ -485,8 +485,8 @@ ham = metaball_mesh("Hamster", [
     ellipsoid((0.0, 0.20, 0.25), (0.40, 0.46, 0.27)),          # body, a round loaf
     ellipsoid((0.0, 0.40, 0.21), (0.37, 0.30, 0.22)),          # rump
     ellipsoid((0.0, -0.22, 0.24), (0.34, 0.31, 0.26)),         # head, big and resting low (asleep)
-    ellipsoid((-0.25, -0.31, 0.16), (0.23, 0.21, 0.19)),       # cheek pouch L, stuffed with "checked" seeds
-    ellipsoid((0.25, -0.31, 0.16), (0.23, 0.21, 0.19)),        # cheek pouch R
+    ellipsoid((-0.2, -0.32, 0.16), (0.18, 0.18, 0.16)),        # cheek pouch L
+    ellipsoid((0.2, -0.32, 0.16), (0.18, 0.18, 0.16)),         # cheek pouch R
     ellipsoid((0.0, -0.45, 0.17), (0.12, 0.12, 0.11)),         # muzzle
     ellipsoid((0.33, 0.50, 0.07), (0.12, 0.17, 0.07)),         # hind foot peeking out
 ], M_SKIN, resolution=0.015)
@@ -780,42 +780,51 @@ def heart_xy(t, s=0.011):
             (13 * math.cos(t) - 5 * math.cos(2 * t) - 2 * math.cos(3 * t) - math.cos(4 * t)) * s * w)
 
 
-crayon_loop("Heart", (LEFT + text_width(L_SIG) + 0.3, rule_y(0) + 0.14), heart_xy)
+crayon_loop("Heart", (LEFT + text_width(L_SIG) + 0.3, rule_y(-1) + 0.14), heart_xy)
 
-# --- the gift: one real sunflower seed on the letter, ringed in red crayon, "for you" written by it
-M_SEED = new_material("Seed", (0.03, 0.03, 0.03), rough=0.35, coat=0.3)
-snt = M_SEED.node_tree
-stc = node(snt, "ShaderNodeTexCoord", (-900, 200))
-swave = node(snt, "ShaderNodeTexWave", (-700, 200), Scale=3.2, Distortion=1.2, Detail=2.0)
-swave.bands_direction = "X"
-snt.links.new(stc.outputs["Object"], swave.inputs["Vector"])
-sramp = snt.nodes.new("ShaderNodeValToRGB")
-sramp.location = (-450, 200)
-sramp.color_ramp.elements[0].position = 0.72
-sramp.color_ramp.elements[0].color = (0.02, 0.02, 0.022, 1)
-sramp.color_ramp.elements[1].position = 0.86
-sramp.color_ramp.elements[1].color = (0.75, 0.72, 0.66, 1)
-snt.links.new(swave.outputs["Fac"], sramp.inputs["Fac"])
-snt.links.new(sramp.outputs["Color"], principled_of(M_SEED).inputs["Base Color"])
-SEED_C = (LEFT + text_width(L_SEED) + 0.75, rule_y(1) + 0.12)
-seed_loc = on_paper(*SEED_C, 0.045)
-bpy.ops.mesh.primitive_uv_sphere_add(segments=32, ring_count=16, radius=1.0, location=seed_loc,
-                                     rotation=(0, 0, PAPER_ROT + math.radians(25)))
-seed = bpy.context.active_object
-seed.scale = (0.1, 0.2, 0.055)
-bm_seed = seed.data
-for v in bm_seed.vertices:  # one end pointed, like a real seed
-    if v.co.y > 0:
-        f = 1.0 - 0.55 * v.co.y ** 2
-        v.co.x *= f
-        v.co.z *= f
-seed.data.materials.append(M_SEED)
-bpy.ops.object.shade_smooth()
-crayon_loop("SeedRing", SEED_C, lambda t: (0.36 * math.cos(t) * (1 + 0.04 * math.sin(3 * t)),
-                                           0.3 * math.sin(t) * (1 + 0.04 * math.cos(2 * t))), turns=1.08)
-ft = text_object("ForYou", "for you!", "Inkfree.ttf", 0.27, on_paper(SEED_C[0] + 0.36, SEED_C[1] - 0.28),
-                 M_RED, PAPER_ROT)
-ft.data.offset = 0.005
+# --- the score: a shiny gold star sticker with a big 5 on it, and a red crayon arrow from "so i did."
+M_GOLD = new_material("GoldFoil", (0.95, 0.55, 0.05), rough=0.32, bump=0.06, bump_scale=120)
+principled_of(M_GOLD).inputs["Metallic"].default_value = 0.55
+M_FIVE = new_material("FiveInk", (0.32, 0.02, 0.01), rough=0.6)
+STAR_C = (1.72, 0.8)
+R_OUT, R_IN = 0.62, 0.27
+sv = [(0.0, 0.0, 0.0)]
+for k in range(10):
+    a = math.pi / 2 + k * math.pi / 5
+    r = R_OUT if k % 2 == 0 else R_IN
+    sv.append((r * math.cos(a), r * math.sin(a), 0.0))
+sf = [(0, 1 + k, 1 + (k + 1) % 10) for k in range(10)]
+sme = bpy.data.meshes.new("Star")
+sme.from_pydata(sv, [], sf)
+star = link(bpy.data.objects.new("Star", sme))
+star.location = on_paper(*STAR_C, 0.003)
+star.rotation_euler = (0, 0, PAPER_ROT + math.radians(-8))
+sme.materials.append(M_GOLD)
+ssol = star.modifiers.new("Thick", "SOLIDIFY")
+ssol.thickness = 0.012
+sbev = star.modifiers.new("Bevel", "BEVEL")
+sbev.width = 0.012
+sbev.segments = 3
+five = text_object("Five", "5", "Inkfree.ttf", 0.62, on_paper(STAR_C[0] - 0.15, STAR_C[1] - 0.24, 0.017), M_FIVE,
+                   PAPER_ROT + math.radians(-8))
+five.data.offset = 0.022
+# the arrow: from the end of "so i did." curving up to the star, with a two-stroke head
+a0 = Vector((LEFT + text_width(L_DID) + 0.12, rule_y(0) + 0.12))
+a1 = Vector((STAR_C[0] - 0.6, STAR_C[1] - 0.3))
+ctrl = Vector(((a0.x + a1.x) / 2, a0.y - 0.05))
+arrow = []
+for k in range(25):
+    t = k / 24
+    q = (1 - t) ** 2 * a0 + 2 * (1 - t) * t * ctrl + t * t * a1
+    arrow.append(tuple(on_paper(q.x, q.y + 0.012 * math.sin(t * 11))))
+ao = curve_object("Arrow", arrow, 0.017, M_RED)
+ao.scale = (1, 1, 0.12)
+tang = (a1 - ctrl).normalized()  # the curve's direction where it arrives
+for sgn in (-1, 1):
+    side = Vector((-tang.y, tang.x)) * sgn
+    h = [tuple(on_paper(*(a1 - tang * 0.22 + side * 0.12))), tuple(on_paper(*a1))]
+    ho = curve_object(f"ArrowHead{sgn}", h, 0.017, M_RED, smooth=False)
+    ho.scale = (1, 1, 0.12)
 
 # --- camera: from the front, looking down the desk
 target = on_paper(0.18, -0.2, 0.0)
@@ -853,7 +862,7 @@ rim.energy = 160
 rim.size = 0.8
 rim.color = (1.0, 0.85, 0.65)
 ro = link(bpy.data.objects.new("Rim", rim))
-ro.location = HAM_LOC + Vector((0.9, 2.4, 1.0))
+ro.location = HAM_LOC + Vector((1.9, 0.4, 0.9))
 ro.rotation_euler = (ro.location - HAM_LOC).to_track_quat("Z", "Y").to_euler()
 fo.rotation_euler = (fo.location - target).to_track_quat("Z", "Y").to_euler()
 world = bpy.data.worlds.new("World")
