@@ -168,6 +168,42 @@ def hair_material(name, top, under, split_z, muzzle=None):
     return mat
 
 
+def add_fur_blush(mat, centers, radius, pink=(1.0, 0.45, 0.42), amount=0.7):
+    """Mixes pink into the fur colour by distance from each centre (object space): blushing cheeks."""
+    nt = mat.node_tree
+    shade = next(n for n in nt.nodes if n.type == "MIX" and n.blend_type == "MULTIPLY")
+    src = shade.inputs["A"].links[0].from_socket
+    tc = node(nt, "ShaderNodeTexCoord", (-1400, -500))
+    fac = None
+    for i, c in enumerate(centers):
+        d = node(nt, "ShaderNodeVectorMath", (-1200, -500 - 150 * i))
+        d.operation = "DISTANCE"
+        d.inputs[1].default_value = c
+        nt.links.new(tc.outputs["Object"], d.inputs[0])
+        mr = node(nt, "ShaderNodeMapRange", (-1000, -500 - 150 * i))
+        mr.interpolation_type = "SMOOTHERSTEP"
+        mr.inputs["From Min"].default_value = radius * 0.3
+        mr.inputs["From Max"].default_value = radius
+        mr.inputs["To Min"].default_value = amount
+        mr.inputs["To Max"].default_value = 0.0
+        nt.links.new(d.outputs["Value"], mr.inputs["Value"])
+        if fac is None:
+            fac = mr.outputs["Result"]
+        else:
+            mx = node(nt, "ShaderNodeMath", (-800, -500))
+            mx.operation = "MAXIMUM"
+            nt.links.new(fac, mx.inputs[0])
+            nt.links.new(mr.outputs["Result"], mx.inputs[1])
+            fac = mx.outputs["Value"]
+    mix = nt.nodes.new("ShaderNodeMix")
+    mix.data_type = "RGBA"
+    mix.location = (-300, -200)
+    mix.inputs["B"].default_value = (*pink, 1)
+    nt.links.new(src, mix.inputs["A"])
+    nt.links.new(fac, mix.inputs["Factor"])
+    nt.links.new(mix.outputs["Result"], shade.inputs["A"])
+
+
 def sphere(name, loc, scale, mat, rot=(0, 0, 0), segs=48):
     bpy.ops.mesh.primitive_uv_sphere_add(segments=segs, ring_count=segs // 2, radius=1.0, location=loc, rotation=rot)
     o = bpy.context.active_object
@@ -461,7 +497,7 @@ def face_hit(u, v):
 nose_p, nose_n = face_hit(0.0, -0.035)
 EYE_U, EYE_V = 0.135, 0.085
 eyes = [face_hit(side * EYE_U, EYE_V) for side in (-1, 1)]
-keep = [(nose_p, 0.05)] + [(p, 0.055) for p, _ in eyes]
+keep = [(nose_p, 0.05)] + [(p, 0.04) for p, _ in eyes]
 
 
 def child(o):
@@ -480,16 +516,20 @@ for i, side in enumerate((-1, 1)):
         q, nn = face_hit(u, v)
         pts.append(tuple(q + nn * 0.016))
     child(curve_object(f"Lid{i}", pts, 0.013, M_LID))
-# a tiny contented mouth under the nose
-mouth = []
-for k in range(13):
-    t = k / 12
-    u = (t - 0.5) * 0.08
-    v = -0.075 - 0.012 * math.sin(2 * math.pi * t) ** 2
+# a happy sleeping smile: a short line down from the nose, then a wide upturned curve
+philtrum = [tuple(q + nn * 0.006) for q, nn in (face_hit(0.0, v) for v in (-0.05, -0.068, -0.08))]
+child(curve_object("Philtrum", philtrum, 0.0065, M_LID))
+smile = []
+for k in range(17):
+    t = k / 16
+    u = (t - 0.5) * 0.15
+    v = -0.08 - 0.03 * math.sin(math.pi * t) + 0.012 * (2 * t - 1) ** 4
     q, nn = face_hit(u, v)
-    mouth.append(tuple(q + nn * 0.005))
-child(curve_object("Mouth", mouth, 0.006, M_LID))
-keep.append((face_hit(0.0, -0.075)[0], 0.05))
+    smile.append(tuple(q + nn * 0.006))
+child(curve_object("Smile", smile, 0.0075, M_LID))
+keep.append((face_hit(0.0, -0.09)[0], 0.065))
+# rosy cheeks: the fur warms to pink round two points on the cheek pouches
+add_fur_blush(M_FUR, [face_hit(side * 0.2, -0.02)[0] for side in (-1, 1)], 0.11)
 # whiskers: fine pale hairs fanning out from either side of the muzzle, drooping a little in his sleep
 for side in (-1, 1):
     for k in range(4):
